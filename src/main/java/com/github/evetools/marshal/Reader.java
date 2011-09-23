@@ -4,7 +4,6 @@ import com.github.evetools.marshal.python.PyBase;
 import com.github.evetools.marshal.python.PyBool;
 import com.github.evetools.marshal.python.PyBuffer;
 import com.github.evetools.marshal.python.PyByte;
-import com.github.evetools.marshal.python.PyContainer;
 import com.github.evetools.marshal.python.PyDBRowDescriptor;
 import com.github.evetools.marshal.python.PyDict;
 import com.github.evetools.marshal.python.PyDouble;
@@ -141,6 +140,10 @@ public class Reader {
 
 		private int readSharedInt() {
 			return sharedBuffer.getInt();
+		}
+
+		private int getPostion() {
+			return buffer.position();
 		}
 	}
 
@@ -701,7 +704,7 @@ public class Reader {
 	private static PyBase loadPy(Buffer buffer) throws IOException {
 		if (root != null) {
 			System.out.println("----------root ---------");
-			new PyDumpVisitor().visit((PyContainer)root);
+			root.visit(new PyDumpVisitor());
 		}
 
 		final byte magic = buffer.readByte();
@@ -723,8 +726,8 @@ public class Reader {
 			}
 		}
 
-		System.out.println("---------- return ---------");
-		new PyDumpVisitor().visit(pyBase);
+		System.out.println("---------- return at position "+buffer.getPostion()+"---------");
+		pyBase.visit(new PyDumpVisitor());
 		return pyBase;
 	}
 
