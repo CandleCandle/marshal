@@ -169,76 +169,23 @@ public class Reader {
 				return Reader.loadIntMinus1(buffer);
 			}
 		},
-
-
-//		/* 0x07 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//		}
-//	},
-//	/* 0x08 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadInt0();
-//		}
-//	},
-//	/* 0x09 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadInt1();
-//		}
-//	},
-//	/* 0x0a */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadDouble();
-//		}
-//	},
-
-		;
-
-		int[] supported;
-		private ParseProvider(int[] supported) {
-			this.supported = new int[supported.length];
-			System.arraycopy(supported, 0, this.supported, 0, supported.length);
-		}
-
-		private static final Map<Integer, ParseProvider> cache = Maps.newHashMap();
-		static {
-			for (ParseProvider pp : values()) {
-				for (int i : pp.supported) {
-					if (!cache.containsKey(i)) {
-						cache.put(i, pp);
-					} else {
-						throw new AssertionError("Duplicate entries for the opcode: "
-								+ i
-								+ " first: " + cache.get(i).name()
-								+ " second: " + pp.name()
-								);
-					}
-				}
+		INT_ZERO(new int[]{0x08}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadInt0(buffer);
 			}
-		}
-		public static ParseProvider from(int marker) {
-			if (cache.containsKey(marker)) {
-				return cache.get(marker);
+		},
+		INT_ONE(new int[]{0x09}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadInt1(buffer);
 			}
-			throw new IllegalArgumentException("There is no available parser "
-					+ "for the marker: 0x"
-					+ Integer.toHexString(0xFF & marker)
-					+ " [actual " + marker + "]"
-					);
-		}
-	}
-
-	private final Buffer buffer;
-
-	private PyBase latest;
-
-	private final Provider[] loadMethods = new Provider[] {
+		},
+		DOUBLE(new int[]{0x0a}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadDouble(buffer);
+			}
+		},
 
 
-//
 //	/* 0x0b */new Provider() {
 //		@Override
 //		public PyBase read() throws IOException {
@@ -275,6 +222,50 @@ public class Reader {
 //			return Reader.this.loadString();
 //		}
 //	},
+
+		;
+
+		int[] supported;
+		private ParseProvider(int[] supported) {
+			this.supported = new int[supported.length];
+			System.arraycopy(supported, 0, this.supported, 0, supported.length);
+		}
+
+		private static final Map<Integer, ParseProvider> cache = Maps.newHashMap();
+		static {
+			for (ParseProvider pp : values()) {
+				for (int i : pp.supported) {
+					if (!cache.containsKey(i)) {
+						cache.put(i, pp);
+					} else {
+						throw new AssertionError("Duplicate entries for the opcode: "
+								+ i
+								+ " first: " + cache.get(i).name()
+								+ " second: " + pp.name()
+								);
+					}
+				}
+			}
+		}
+		public static ParseProvider from(int marker) {
+			if (cache.containsKey(marker)) {
+				return cache.get(marker);
+			}
+			throw new IllegalArgumentException("There is no available parser "
+					+ "for the marker: 0x"
+					+ Integer.toHexString(0xFF & marker)
+					+ " [actual: " + marker + "]"
+					);
+		}
+	}
+
+	private final Buffer buffer;
+
+	private PyBase latest;
+
+	private final Provider[] loadMethods = new Provider[] {
+
+
 //	/* 0x11 */new Provider() {
 //		@Override
 //		public PyBase read() throws IOException {
