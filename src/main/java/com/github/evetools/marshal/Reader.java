@@ -166,7 +166,9 @@ public class Reader {
 		NOT_IMPLEMENTED(
 				0x0c, 0x0d, 0x18, 0x19,
 				0x1a, 0x1c, 0x1d, 0x1e,
-				0x21, 0x24
+				0x21, 0x24, 0x30, 0x31,
+				0x32, 0x33, 0x34, 0x35,
+				0x36, 0x37
 				) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadNotImplemented(buffer);
@@ -385,54 +387,6 @@ public class Reader {
 
 //	private final Provider[] loadMethods = new Provider[] {
 //
-//	/* 0x30 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x31 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x32 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x33 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x34 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x35 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x36 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x37 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
 //	/* 0x38 */new Provider() {
 //		@Override
 //		public PyBase read() throws IOException {
