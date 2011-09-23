@@ -128,12 +128,17 @@ public class Reader {
 	}
 
 	static enum ParseProvider implements Provider<PyBase> {
-		ERROR(new int[]{0x00}) {
+		ERROR(0x00) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				throw new IOException("ERROR");
 			}
 		},
-		NONE(new int[]{0x01}) {
+		NOT_IMPLEMENTED(0x0c, 0x0d) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadNotImplemented(buffer);
+			}
+		},
+		NONE(0x01) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return new PyNone();
 			}
@@ -184,49 +189,33 @@ public class Reader {
 				return Reader.loadDouble(buffer);
 			}
 		},
+		DOUBLE_ZERO(new int[]{0x0a}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadDouble0(buffer);
+			}
+		},
+		STRING_ZERO(new int[]{0x0e}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadString0(buffer);
+			}
+		},
+		STRING_ONE(new int[]{0x0f}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadString1(buffer);
+			}
+		},
+		STRING(new int[]{0x0f}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadString(buffer);
+			}
+		},
 
 
-//	/* 0x0b */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadDouble0();
-//		}
-//	},
-//	/* 0x0c */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x0d */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x0e */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadString0();
-//		}
-//	},
-//	/* 0x0f */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadString1();
-//		}
-//	},
-//	/* 0x10 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadString();
-//		}
-//	},
 
 		;
 
 		int[] supported;
-		private ParseProvider(int[] supported) {
+		private ParseProvider(int... supported) {
 			this.supported = new int[supported.length];
 			System.arraycopy(supported, 0, this.supported, 0, supported.length);
 		}
@@ -263,9 +252,9 @@ public class Reader {
 
 	private PyBase latest;
 
-	private final Provider[] loadMethods = new Provider[] {
-
-
+//	private final Provider[] loadMethods = new Provider[] {
+//
+//
 //	/* 0x11 */new Provider() {
 //		@Override
 //		public PyBase read() throws IOException {
@@ -518,9 +507,7 @@ public class Reader {
 //			return Reader.this.loadNotImplemented();
 //		}
 //	}
-	};
-
-	private int position;
+//	};
 
 	private Map<Integer, PyBase> shared;
 
@@ -721,9 +708,11 @@ public class Reader {
 		return new PyMarker();
 	}
 
-	private PyBase loadNotImplemented() throws IOException {
+	private static PyBase loadNotImplemented(Buffer buffer) throws IOException {
+		byte[] type = buffer.peekBytes(buffer.position()-1, 1);
+
 		throw new IOException("Not implemented: "
-				+ Integer.toHexString(this.type) + " at: " + this.position);
+				+ Integer.toHexString(type[0]) + " at: " + buffer.position());
 	}
 
 	private PyBase loadObjectEx() throws IOException {
@@ -833,8 +822,6 @@ public class Reader {
 
 	private PyBase loadPy(Buffer buffer) throws IOException {
 
-		this.position = buffer.position();
-
 		final byte magic = buffer.readByte();
 		final boolean sharedPy = (magic & 0x40) != 0;
 		this.type = magic;
@@ -869,16 +856,16 @@ public class Reader {
 		return new PyShort(buffer.readShort());
 	}
 
-	private PyBase loadString() throws IOException {
-		return new PyString(new String(this.buffer.readBytes(buffer.readLength())));
+	private static PyBase loadString(Buffer buffer) throws IOException {
+		return new PyString(new String(buffer.readBytes(buffer.readLength())));
 	}
 
-	private PyBase loadString0() throws IOException {
+	private static PyBase loadString0(Buffer buffer) throws IOException {
 		return new PyString("");
 	}
 
-	private PyBase loadString1() throws IOException {
-		return new PyString(new String(this.buffer.readBytes(1)));
+	private static PyBase loadString1(Buffer buffer) throws IOException {
+		return new PyString(new String(buffer.readBytes(1)));
 	}
 
 	private PyBase loadStringRef() throws IOException {
