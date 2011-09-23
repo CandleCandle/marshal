@@ -159,12 +159,12 @@ public class Reader {
 				return Reader.loadShort(buffer);
 			}
 		},
-		BYTE(new int[]{0x03}) {
+		BYTE(new int[]{0x06}) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadByte(buffer);
 			}
 		},
-		INT_MINUS_ONE(new int[]{0x03}) {
+		INT_MINUS_ONE(new int[]{0x07}) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadIntMinus1(buffer);
 			}
@@ -223,7 +223,11 @@ public class Reader {
 			if (cache.containsKey(marker)) {
 				return cache.get(marker);
 			}
-			throw new IllegalArgumentException("There is no available parser for the marker: 0x" + Integer.toHexString(0xFF & marker) + " [was " + marker + "]");
+			throw new IllegalArgumentException("There is no available parser "
+					+ "for the marker: 0x"
+					+ Integer.toHexString(0xFF & marker)
+					+ " [actual " + marker + "]"
+					);
 		}
 	}
 
