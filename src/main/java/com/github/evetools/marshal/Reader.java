@@ -163,7 +163,11 @@ public class Reader {
 				throw new IOException("ERROR");
 			}
 		},
-		NOT_IMPLEMENTED(0x0c, 0x0d, 0x18, 0x19, 0x1a, 0x1c, 0x1d, 0x1e) {
+		NOT_IMPLEMENTED(
+				0x0c, 0x0d, 0x18, 0x19,
+				0x1a, 0x1c, 0x1d, 0x1e,
+				0x21, 0x24
+				) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadNotImplemented(buffer);
 			}
@@ -173,117 +177,148 @@ public class Reader {
 				return new PyNone();
 			}
 		},
-		GLOBAL(new int[]{0x02}) {
+		GLOBAL(0x02) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				final byte[] bytes = buffer.readBytes(buffer.readLength());
 				return new PyGlobal(new String(bytes));
 			}
 		},
-		LONG(new int[]{0x03}) {
+		LONG(0x03) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadLong(buffer);
 			}
 		},
-		INT(new int[]{0x04}) {
+		INT(0x04) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadInt(buffer);
 			}
 		},
-		SHORT(new int[]{0x05}) {
+		SHORT(0x05) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadShort(buffer);
 			}
 		},
-		BYTE(new int[]{0x06}) {
+		BYTE(0x06) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadByte(buffer);
 			}
 		},
-		INT_MINUS_ONE(new int[]{0x07}) {
+		INT_MINUS_ONE(0x07) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadIntMinus1(buffer);
 			}
 		},
-		INT_ZERO(new int[]{0x08}) {
+		INT_ZERO(0x08) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadInt0(buffer);
 			}
 		},
-		INT_ONE(new int[]{0x09}) {
+		INT_ONE(0x09) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadInt1(buffer);
 			}
 		},
-		DOUBLE(new int[]{0x0a}) {
+		DOUBLE(0x0a) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadDouble(buffer);
 			}
 		},
-		DOUBLE_ZERO(new int[]{0x0a}) {
+		DOUBLE_ZERO(0x0a) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadDouble0(buffer);
 			}
 		},
-		STRING_ZERO(new int[]{0x0e}) {
+		STRING_ZERO(0x0e) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadString0(buffer);
 			}
 		},
-		STRING_ONE(new int[]{0x0f}) {
+		STRING_ONE(0x0f) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadString1(buffer);
 			}
 		},
-		STRING(new int[]{0x10}) {
+		STRING(0x10) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadString(buffer);
 			}
 		},
-		STRING_REF(new int[]{0x11}) {
+		STRING_REF(0x11) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadStringRef(buffer);
 			}
 		},
-		STRING_UNICODE(new int[]{0x12}) {
+		STRING_UNICODE(0x12) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadUnicode(buffer);
 			}
 		},
-		BUFFER(new int[]{0x13}) {
+		BUFFER(0x13) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadBuffer(buffer);
 			}
 		},
-		TUPLE(new int[]{0x14}) {
+		TUPLE(0x14) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadTuple(buffer);
 			}
 		},
-		LIST(new int[]{0x15}) {
+		LIST(0x15) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadList(buffer);
 			}
 		},
-		DICT(new int[]{0x16}) {
+		DICT(0x16) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadDict(buffer);
 			}
 		},
-		INSTANCE(new int[]{0x17}) {
+		INSTANCE(0x17) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadInstance(buffer);
 			}
 		},
-		REFERENCE(new int[]{0x1b}) {
+		REFERENCE(0x1b) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadReference(buffer);
 			}
 		},
-		TRUE(new int[]{0x1f}) {
+		TRUE(0x1f) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadTrue(buffer);
 			}
 		},
+		FALSE(0x20) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadFalse(buffer);
+			}
+		},
+		OBJECT_EX(0x22, 0x23) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadObjectEx(buffer);
+			}
+		},
+		TUPLE_ONE(0x25) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadTuple1(buffer);
+			}
+		},
+		LIST_ZERO(0x26) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadList0(buffer);
+			}
+		},
+		LIST_ONE(0x27) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadList1(buffer);
+			}
+		},
+		UNICODE_ONE(0x28) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadUnicode0(buffer);
+			}
+		},
+
 
 		;
 
@@ -325,60 +360,6 @@ public class Reader {
 
 //	private final Provider[] loadMethods = new Provider[] {
 //
-//	/* 0x20 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadFalse();
-//		}
-//	},
-//	/* 0x21 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x22 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadObjectEx();
-//		}
-//	},
-//	/* 0x23 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadObjectEx();
-//		}
-//	},
-//	/* 0x24 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x25 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadTuple1();
-//		}
-//	},
-//	/* 0x26 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadList0();
-//		}
-//	},
-//	/* 0x27 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadList1();
-//		}
-//	},
-//	/* 0x28 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadUnicode0();
-//		}
-//	},
 //	/* 0x29 */new Provider() {
 //		@Override
 //		public PyBase read() throws IOException {
@@ -875,11 +856,11 @@ public class Reader {
 		return tuple;
 	}
 
-	private PyBase loadTuple1(Buffer buffer) throws IOException {
+	private static PyBase loadTuple1(Buffer buffer) throws IOException {
 		return loadTuple(buffer, 1);
 	}
 
-	private PyBase loadTuple2(Buffer buffer) throws IOException {
+	private static PyBase loadTuple2(Buffer buffer) throws IOException {
 		return loadTuple(buffer, 2);
 	}
 
@@ -887,15 +868,15 @@ public class Reader {
 		return new PyString(new String(buffer.readBytes(buffer.readLength() * 2)));
 	}
 
-	private PyBase loadUnicode0() throws IOException {
+	private static PyBase loadUnicode0(Buffer buffer) throws IOException {
 		return new PyString("");
 	}
 
-	private PyBase loadUnicode1() throws IOException {
-		return new PyString(new String(this.buffer.readBytes(2)));
+	private static PyBase loadUnicode1(Buffer buffer) throws IOException {
+		return new PyString(new String(buffer.readBytes(2)));
 	}
 
-	private PyBase loadVarInt() throws IOException {
+	private static PyBase loadVarInt(Buffer buffer) throws IOException {
 
 		final int size = buffer.readLength();
 
@@ -909,10 +890,8 @@ public class Reader {
 		case 8:
 			return loadLong(buffer);
 		default:
-			final byte[] bytes = this.buffer.readBytes(size);
-
+			final byte[] bytes = buffer.readBytes(size);
 			final BigInteger bi = new BigInteger(bytes);
-
 			return new PyLong(bi.longValue());
 		}
 	}
