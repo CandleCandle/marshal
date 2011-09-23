@@ -33,7 +33,6 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Map;
-import java.util.HashMap;
 
 /**
  * Copyright (C)2011 by Gregor Anders
@@ -48,10 +47,30 @@ public class Reader {
 	private static class Buffer {
 
 		private final ByteBuffer buffer;
+		private final Map<Integer, PyBase> shared;
+		private ByteBuffer sharedBuffer;
+		PyBase latest;
 
 		Buffer(byte[] bytes) {
 			this.buffer = ByteBuffer.wrap(bytes);
 			this.buffer.order(ByteOrder.LITTLE_ENDIAN);
+			shared = Maps.newHashMap();
+		}
+
+		public PyBase putReference(int key, PyBase value) {
+			return shared.put(key, value);
+		}
+
+		public PyBase getReference(int key) {
+			return shared.get(key);
+		}
+
+		public PyBase getLatest() {
+			return latest;
+		}
+
+		public void setLatest(PyBase latest) {
+			this.latest = latest;
 		}
 
 		public final int length() {
@@ -109,6 +128,17 @@ public class Reader {
 				length = readInt();
 			}
 			return length;
+		}
+
+		private void initSharedVector() {
+			final int size = readInt();
+			final int offset = length() - (size * 4);
+			sharedBuffer = ByteBuffer.wrap(peekBytes(offset, (size * 4)));
+			sharedBuffer.order(ByteOrder.LITTLE_ENDIAN);
+		}
+
+		private int readSharedInt() {
+			return sharedBuffer.getInt();
 		}
 	}
 
@@ -204,13 +234,31 @@ public class Reader {
 				return Reader.loadString1(buffer);
 			}
 		},
-		STRING(new int[]{0x0f}) {
+		STRING(new int[]{0x10}) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadString(buffer);
 			}
 		},
-
-
+		STRING_REF(new int[]{0x11}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadStringRef(buffer);
+			}
+		},
+		STRING_UNICODE(new int[]{0x12}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadUnicode(buffer);
+			}
+		},
+		BUFFER(new int[]{0x13}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadBuffer(buffer);
+			}
+		},
+		TUPLE(new int[]{0x14}) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadTuple(buffer);
+			}
+		},
 
 		;
 
@@ -250,35 +298,9 @@ public class Reader {
 
 	private final Buffer buffer;
 
-	private PyBase latest;
-
 //	private final Provider[] loadMethods = new Provider[] {
 //
 //
-//	/* 0x11 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadStringRef();
-//		}
-//	},
-//	/* 0x12 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadUnicode();
-//		}
-//	},
-//	/* 0x13 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadBuffer();
-//		}
-//	},
-//	/* 0x14 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadTuple();
-//		}
-//	},
 //	/* 0x15 */new Provider() {
 //		@Override
 //		public PyBase read() throws IOException {
@@ -509,12 +531,6 @@ public class Reader {
 //	}
 //	};
 
-	private Map<Integer, PyBase> shared;
-
-	private Buffer sharedBuffer;
-
-	private int type;
-
 	private Reader(Buffer buffer) throws IOException {
 		this.buffer = buffer;
 	}
@@ -552,9 +568,9 @@ public class Reader {
 	}
 
 
-	private PyBase loadBuffer() throws IOException {
+	private static PyBase loadBuffer(Buffer buffer) throws IOException {
 		final int size = buffer.readLength();
-		final byte[] bytes = this.buffer.readBytes(size);
+		final byte[] bytes = buffer.readBytes(size);
 
 		if (bytes[0] == 0x78) {
 
@@ -715,16 +731,16 @@ public class Reader {
 				+ Integer.toHexString(type[0]) + " at: " + buffer.position());
 	}
 
-	private PyBase loadObjectEx() throws IOException {
+	private static PyBase loadObjectEx(Buffer buffer) throws IOException {
 
 		final PyObjectEx objectex = new PyObjectEx();
 
-		latest = objectex;
+		buffer.setLatest(objectex);
 
-		objectex.setHead(this.loadPy(buffer));
+		objectex.setHead(loadPy(buffer));
 
 		while (buffer.peekByte() != 0x2d) {
-			objectex.getList().add(this.loadPy(buffer));
+			objectex.getList().add(loadPy(buffer));
 		}
 		buffer.readByte();
 
@@ -815,17 +831,17 @@ public class Reader {
 
 		for (final PyBase pyBase : list) {
 			final PyTuple tuple = pyBase.asTuple();
-			base.put(tuple.get(0), this.loadPy(buffer));
+			base.put(tuple.get(0), loadPy(buffer));
 		}
 		return base;
 	}
 
-	private PyBase loadPy(Buffer buffer) throws IOException {
+	private static PyBase loadPy(Buffer buffer) throws IOException {
 
 		final byte magic = buffer.readByte();
 		final boolean sharedPy = (magic & 0x40) != 0;
-		this.type = magic;
-		this.type = (this.type & 0x3f);
+		int type = magic;
+		type = (type & 0x3f);
 
 		final PyBase pyBase = ParseProvider.from(type).read(buffer);
 
@@ -834,18 +850,17 @@ public class Reader {
 			if ((pyBase.isGlobal())
 					&& (pyBase.asGlobal().getValue().endsWith(
 							"blue.DBRowDescriptor"))) {
-				this.shared.put(Integer.valueOf(this.sharedBuffer.readInt()),
-						this.latest);
+				buffer.putReference(buffer.readSharedInt(), buffer.getLatest());
 			} else {
-				this.shared.put(Integer.valueOf(this.sharedBuffer.readInt()), pyBase);
+				buffer.putReference(buffer.readSharedInt(), pyBase);
 			}
 		}
 
 		return pyBase;
 	}
 
-	private PyBase loadReference() throws IOException {
-		return this.shared.get(Integer.valueOf(buffer.readLength()));
+	private PyBase loadReference(Buffer buffer) throws IOException {
+		return buffer.getReference(Integer.valueOf(buffer.readLength()));
 	}
 
 	private static PyBase loadLong(Buffer buffer) {
@@ -868,7 +883,7 @@ public class Reader {
 		return new PyString(new String(buffer.readBytes(1)));
 	}
 
-	private PyBase loadStringRef() throws IOException {
+	private static PyBase loadStringRef(Buffer buffer) throws IOException {
 		return new PyString(Strings.get(buffer.readLength()));
 	}
 
@@ -883,16 +898,16 @@ public class Reader {
 		return new PyBool(true);
 	}
 
-	private PyBase loadTuple() throws IOException {
-		return this.loadTuple(buffer.readLength());
+	private static PyBase loadTuple(Buffer buffer) throws IOException {
+		return loadTuple(buffer, buffer.readLength());
 	}
 
-	private PyBase loadTuple(int size) throws IOException {
+	private static PyBase loadTuple(Buffer buffer, int size) throws IOException {
 		final PyTuple tuple = new PyTuple();
 		PyBase base = null;
 		int curSize = size;
 		while (curSize > 0) {
-			base = this.loadPy(buffer);
+			base = loadPy(buffer);
 			if (base == null) {
 				throw new IOException("null element in tuple found");
 			}
@@ -902,16 +917,16 @@ public class Reader {
 		return tuple;
 	}
 
-	private PyBase loadTuple1() throws IOException {
-		return this.loadTuple(1);
+	private PyBase loadTuple1(Buffer buffer) throws IOException {
+		return loadTuple(buffer, 1);
 	}
 
-	private PyBase loadTuple2() throws IOException {
-		return this.loadTuple(2);
+	private PyBase loadTuple2(Buffer buffer) throws IOException {
+		return loadTuple(buffer, 2);
 	}
 
-	private PyBase loadUnicode() throws IOException {
-		return new PyString(new String(this.buffer.readBytes(buffer.readLength() * 2)));
+	private static PyBase loadUnicode(Buffer buffer) throws IOException {
+		return new PyString(new String(buffer.readBytes(buffer.readLength() * 2)));
 	}
 
 	private PyBase loadUnicode0() throws IOException {
@@ -946,15 +961,8 @@ public class Reader {
 
 	public PyBase read() throws IOException {
 
-		this.buffer.readByte();
-		final int size = this.buffer.readInt();
-
-		this.shared = new HashMap<Integer, PyBase>(size);
-
-		final int offset = this.buffer.length() - (size * 4);
-
-		this.sharedBuffer = new Buffer(
-				this.buffer.peekBytes(offset, (size * 4)));
+		this.buffer.readByte(); // throw the first byte away. it's the protocol marker
+		buffer.initSharedVector();
 
 		PyBase base = null;
 
