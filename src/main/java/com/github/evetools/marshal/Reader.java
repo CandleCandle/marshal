@@ -4,9 +4,11 @@ import com.github.evetools.marshal.python.PyBase;
 import com.github.evetools.marshal.python.PyBool;
 import com.github.evetools.marshal.python.PyBuffer;
 import com.github.evetools.marshal.python.PyByte;
+import com.github.evetools.marshal.python.PyContainer;
 import com.github.evetools.marshal.python.PyDBRowDescriptor;
 import com.github.evetools.marshal.python.PyDict;
 import com.github.evetools.marshal.python.PyDouble;
+import com.github.evetools.marshal.python.PyDumpVisitor;
 import com.github.evetools.marshal.python.PyGlobal;
 import com.github.evetools.marshal.python.PyInt;
 import com.github.evetools.marshal.python.PyList;
@@ -168,7 +170,8 @@ public class Reader {
 				0x1a, 0x1c, 0x1d, 0x1e,
 				0x21, 0x24, 0x30, 0x31,
 				0x32, 0x33, 0x34, 0x35,
-				0x36, 0x37
+				0x36, 0x37, 0x38, 0x39,
+				0x3a
 				) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadNotImplemented(buffer);
@@ -330,6 +333,11 @@ public class Reader {
 				return Reader.loadPacked(buffer);
 			}
 		},
+		SUB_STREAM(0x2b) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadPacked(buffer);
+			}
+		},
 		TUPLE_TWO(0x2c) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadTuple2(buffer);
@@ -345,8 +353,6 @@ public class Reader {
 				return Reader.loadVarInt(buffer);
 			}
 		},
-
-
 		;
 
 		int[] supported;
@@ -384,28 +390,6 @@ public class Reader {
 	}
 
 	private final Buffer buffer;
-
-//	private final Provider[] loadMethods = new Provider[] {
-//
-//	/* 0x38 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x39 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	},
-//	/* 0x3a */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadNotImplemented();
-//		}
-//	}
-//	};
 
 	private Reader(Buffer buffer) throws IOException {
 		this.buffer = buffer;
@@ -712,14 +696,21 @@ public class Reader {
 		return base;
 	}
 
+	static PyBase root = null;
+
 	private static PyBase loadPy(Buffer buffer) throws IOException {
+		if (root != null) {
+			System.out.println("----------root ---------");
+			new PyDumpVisitor().visit((PyContainer)root);
+		}
 
 		final byte magic = buffer.readByte();
 		final boolean sharedPy = (magic & 0x40) != 0;
 		int type = magic;
 		type = (type & 0x3f);
 
-		final PyBase pyBase = ParseProvider.from(type).read(buffer);
+		ParseProvider provider = ParseProvider.from(type);
+		final PyBase pyBase = provider.read(buffer);
 
 		if (sharedPy) {
 			// this is a dirty hack and maybe leads to errors
@@ -732,6 +723,8 @@ public class Reader {
 			}
 		}
 
+		System.out.println("---------- return ---------");
+		new PyDumpVisitor().visit(pyBase);
 		return pyBase;
 	}
 
@@ -780,6 +773,7 @@ public class Reader {
 
 	private static PyBase loadTuple(Buffer buffer, int size) throws IOException {
 		final PyTuple tuple = new PyTuple();
+		if (root == null) root = tuple;
 		PyBase base = null;
 		int curSize = size;
 		while (curSize > 0) {
