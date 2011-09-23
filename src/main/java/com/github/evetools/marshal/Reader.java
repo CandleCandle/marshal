@@ -223,7 +223,7 @@ public class Reader {
 				return Reader.loadDouble(buffer);
 			}
 		},
-		DOUBLE_ZERO(0x0a) {
+		DOUBLE_ZERO(0x0b) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadDouble0(buffer);
 			}
