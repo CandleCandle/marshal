@@ -253,7 +253,7 @@ public class Reader {
 				return Reader.loadUnicode(buffer);
 			}
 		},
-		BUFFER(0x13) {
+		BUFFER(0x13, 0x2e) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadBuffer(buffer);
 			}
@@ -313,9 +313,34 @@ public class Reader {
 				return Reader.loadList1(buffer);
 			}
 		},
-		UNICODE_ONE(0x28) {
+		UNICODE_ZERO(0x28) {
 			@Override public PyBase read(Buffer buffer) throws IOException {
 				return Reader.loadUnicode0(buffer);
+			}
+		},
+		UNICODE_ONE(0x29) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadUnicode1(buffer);
+			}
+		},
+		PACKED(0x2a) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadPacked(buffer);
+			}
+		},
+		TUPLE_TWO(0x2c) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadTuple2(buffer);
+			}
+		},
+		MARKER(0x2d) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadMarker(buffer);
+			}
+		},
+		VAR_INT(0x2f) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadVarInt(buffer);
 			}
 		},
 
@@ -360,48 +385,6 @@ public class Reader {
 
 //	private final Provider[] loadMethods = new Provider[] {
 //
-//	/* 0x29 */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadUnicode1();
-//		}
-//	},
-//	/* 0x2a */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadPacked();
-//		}
-//	},
-//	/* 0x2b */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadSubStream();
-//		}
-//	},
-//	/* 0x2c */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadTuple2();
-//		}
-//	},
-//	/* 0x2d */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadMarker();
-//		}
-//	},
-//	/* 0x2e */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadBuffer();
-//		}
-//	},
-//	/* 0x2f */new Provider() {
-//		@Override
-//		public PyBase read() throws IOException {
-//			return Reader.this.loadVarInt();
-//		}
-//	},
 //	/* 0x30 */new Provider() {
 //		@Override
 //		public PyBase read() throws IOException {
@@ -493,7 +476,7 @@ public class Reader {
 		this.buffer = new Buffer(baos.toByteArray());
 	}
 
-	private PyDBRowDescriptor toDBRowDescriptor(PyBase base)
+	private static PyDBRowDescriptor toDBRowDescriptor(PyBase base)
 			throws IOException {
 
 		if (!(base instanceof PyObjectEx)) {
@@ -659,7 +642,7 @@ public class Reader {
 		return loadList(buffer, 1);
 	}
 
-	private PyBase loadMarker(Buffer buffer) throws IOException {
+	private static PyBase loadMarker(Buffer buffer) throws IOException {
 		return new PyMarker();
 	}
 
@@ -696,19 +679,19 @@ public class Reader {
 		return objectex;
 	}
 
-	private PyBase loadPacked() throws IOException {
+	private static PyBase loadPacked(Buffer buffer) throws IOException {
 
 		final PyBase head = loadPy(buffer);
 		int size = buffer.readLength();
-		final byte[] bytes = this.buffer.readBytes(size);
+		final byte[] bytes = buffer.readBytes(size);
 
 		final PyPackedRow base = new PyPackedRow(head, new PyBuffer(bytes));
 
-		final PyDBRowDescriptor desc = this.toDBRowDescriptor(head);
+		final PyDBRowDescriptor desc = toDBRowDescriptor(head);
 
 		size = desc.size();
 
-		final byte[] out = this.zerouncompress(bytes, size);
+		final byte[] out = zerouncompress(bytes, size);
 
 		final Buffer outbuf = new Buffer(out);
 
@@ -908,7 +891,7 @@ public class Reader {
 		return base;
 	}
 
-	private byte[] zerouncompress(byte[] bytes, int size) throws IOException {
+	private static byte[] zerouncompress(byte[] bytes, int size) throws IOException {
 
 		final byte[] out = new byte[size + 16];
 		int outpos = 0;
