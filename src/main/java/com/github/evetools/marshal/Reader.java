@@ -430,12 +430,12 @@ public class Reader {
 
 		private static final Map<Integer, ParseProvider> cache = Maps.newHashMap();
 		static {
-			Map<Integer, ParseProvider> list = Maps.newTreeMap();
+//			Map<Integer, ParseProvider> list = Maps.newTreeMap();
 			for (ParseProvider pp : values()) {
 				for (int i : pp.supported) {
 					if (!cache.containsKey(i)) {
 						cache.put(i, pp);
-						list.put(i, pp);
+//						list.put(i, pp);
 					} else {
 						throw new AssertionError("Duplicate entries for the opcode: "
 								+ i
@@ -445,9 +445,9 @@ public class Reader {
 					}
 				}
 			}
-			for (Map.Entry<Integer, ParseProvider> e : list.entrySet()) {
-				System.out.println(e.getKey() + " [" + Integer.toHexString(e.getKey()) + "] --> " + e.getValue());
-			}
+//			for (Map.Entry<Integer, ParseProvider> e : list.entrySet()) {
+//				System.out.println(e.getKey() + " [" + Integer.toHexString(e.getKey()) + "] --> " + e.getValue());
+//			}
 		}
 		public static ParseProvider from(int marker) throws NoSuchProviderException {
 			if (cache.containsKey(marker)) {
