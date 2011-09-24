@@ -360,7 +360,12 @@ public class Reader {
 				return Reader.loadFalse(buffer);
 			}
 		},
-		OBJECT_EX(0x22, 0x23) {
+		OBJECT_REDUCE(0x22) {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
+				return Reader.loadObjectReduce(buffer);
+			}
+		},
+		OBJECT_EX(0x23) {
 			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadObjectEx(buffer);
 			}
@@ -425,10 +430,12 @@ public class Reader {
 
 		private static final Map<Integer, ParseProvider> cache = Maps.newHashMap();
 		static {
+			Map<Integer, ParseProvider> list = Maps.newTreeMap();
 			for (ParseProvider pp : values()) {
 				for (int i : pp.supported) {
 					if (!cache.containsKey(i)) {
 						cache.put(i, pp);
+						list.put(i, pp);
 					} else {
 						throw new AssertionError("Duplicate entries for the opcode: "
 								+ i
@@ -437,6 +444,9 @@ public class Reader {
 								);
 					}
 				}
+			}
+			for (Map.Entry<Integer, ParseProvider> e : list.entrySet()) {
+				System.out.println(e.getKey() + " [" + Integer.toHexString(e.getKey()) + "] --> " + e.getValue());
 			}
 		}
 		public static ParseProvider from(int marker) throws NoSuchProviderException {
