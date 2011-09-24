@@ -46,7 +46,7 @@ import java.util.Stack;
  */
 public class Reader {
 
-	public static class Buffer {
+	public static class WrappedBuffer {
 
 		private final ByteBuffer buffer;
 		private final Map<Integer, PyBase> shared;
@@ -55,7 +55,7 @@ public class Reader {
 		private ByteBuffer sharedBuffer;
 		PyBase latest;
 
-		Buffer(byte[] bytes) {
+		WrappedBuffer(byte[] bytes) {
 			this.buffer = ByteBuffer.wrap(bytes);
 			this.buffer.order(ByteOrder.LITTLE_ENDIAN);
 			shared = Maps.newHashMap();
@@ -175,7 +175,7 @@ public class Reader {
 	}
 
 	interface Provider<T> {
-		T read(Buffer buffer) throws IOException;
+		T read(WrappedBuffer buffer) throws IOException;
 	}
 
 	private static byte fromBitSet(BitSet bitSet) {
@@ -191,7 +191,7 @@ public class Reader {
 
 	static enum ParseProvider implements Provider<PyBase> {
 		ERROR(0x00) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				throw new IOException("ERROR");
 			}
 		},
@@ -203,183 +203,183 @@ public class Reader {
 				0x36, 0x37, 0x38, 0x39,
 				0x3a
 				) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadNotImplemented(buffer);
 			}
 		},
 		NONE(0x01) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return new PyNone();
 			}
 		},
 		GLOBAL(0x02) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				final byte[] bytes = buffer.readBytes(buffer.readLength());
 				return new PyGlobal(bytes);
 			}
 		},
 		LONG(0x03) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadLong(buffer);
 			}
 		},
 		INT(0x04) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadInt(buffer);
 			}
 		},
 		SHORT(0x05) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadShort(buffer);
 			}
 		},
 		BYTE(0x06) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadByte(buffer);
 			}
 		},
 		INT_MINUS_ONE(0x07) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadIntMinus1(buffer);
 			}
 		},
 		INT_ZERO(0x08) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadInt0(buffer);
 			}
 		},
 		INT_ONE(0x09) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadInt1(buffer);
 			}
 		},
 		DOUBLE(0x0a) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadDouble(buffer);
 			}
 		},
 		DOUBLE_ZERO(0x0b) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadDouble0(buffer);
 			}
 		},
 		STRING_ZERO(0x0e) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadString0(buffer);
 			}
 		},
 		STRING_ONE(0x0f) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadString1(buffer);
 			}
 		},
 		STRING(0x10) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadString(buffer);
 			}
 		},
 		STRING_REF(0x11) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadStringRef(buffer);
 			}
 		},
 		STRING_UNICODE(0x12) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadUnicode(buffer);
 			}
 		},
 		BUFFER(0x13, 0x2e) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadBuffer(buffer);
 			}
 		},
 		TUPLE(0x14) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadTuple(buffer);
 			}
 		},
 		LIST(0x15) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadList(buffer);
 			}
 		},
 		DICT(0x16) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadDict(buffer);
 			}
 		},
 		INSTANCE(0x17) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadInstance(buffer);
 			}
 		},
 		REFERENCE(0x1b) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadReference(buffer);
 			}
 		},
 		TRUE(0x1f) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadTrue(buffer);
 			}
 		},
 		FALSE(0x20) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadFalse(buffer);
 			}
 		},
 		OBJECT_EX(0x22, 0x23) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadObjectEx(buffer);
 			}
 		},
 		TUPLE_ONE(0x25) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadTuple1(buffer);
 			}
 		},
 		LIST_ZERO(0x26) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadList0(buffer);
 			}
 		},
 		LIST_ONE(0x27) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadList1(buffer);
 			}
 		},
 		UNICODE_ZERO(0x28) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadUnicode0(buffer);
 			}
 		},
 		UNICODE_ONE(0x29) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadUnicode1(buffer);
 			}
 		},
 		PACKED(0x2a) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadPacked(buffer);
 			}
 		},
 		SUB_STREAM(0x2b) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadPacked(buffer);
 			}
 		},
 		TUPLE_TWO(0x2c) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadTuple2(buffer);
 			}
 		},
 		MARKER(0x2d) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadMarker(buffer);
 			}
 		},
 		VAR_INT(0x2f) {
-			@Override public PyBase read(Buffer buffer) throws IOException {
+			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadVarInt(buffer);
 			}
 		},
@@ -420,9 +420,9 @@ public class Reader {
 	}
 
 
-	private final Buffer buffer;
+	private final WrappedBuffer buffer;
 
-	private Reader(Buffer buffer) throws IOException {
+	private Reader(WrappedBuffer buffer) throws IOException {
 		this.buffer = buffer;
 	}
 
@@ -442,7 +442,7 @@ public class Reader {
 
 		stream.close();
 
-		this.buffer = new Buffer(baos.toByteArray());
+		this.buffer = new WrappedBuffer(baos.toByteArray());
 	}
 
 	private static PyDBRowDescriptor toDBRowDescriptor(PyBase base)
@@ -459,7 +459,7 @@ public class Reader {
 	}
 
 
-	private static PyBase loadBuffer(Buffer buffer) throws IOException {
+	private static PyBase loadBuffer(WrappedBuffer buffer) throws IOException {
 		final int size = buffer.readLength();
 		final byte[] bytes = buffer.readBytes(size);
 
@@ -513,7 +513,7 @@ public class Reader {
 					byte[] uncom = new byte[(int) zstream.total_out];
 					System.arraycopy(zout, 0, uncom, 0, uncom.length);
 
-					final Buffer buf = new Buffer(uncom);
+					final WrappedBuffer buf = new WrappedBuffer(uncom);
 					final Reader reader = new Reader(buf);
 
 					return reader.read();
@@ -523,12 +523,12 @@ public class Reader {
 		return new PyBuffer(bytes);
 	}
 
-	private static PyBase loadByte(Buffer buffer) throws IOException {
+	private static PyBase loadByte(WrappedBuffer buffer) throws IOException {
 		final byte valueByte = buffer.readByte();
 		return new PyByte(valueByte);
 	}
 
-	private static PyBase loadDict(Buffer buffer) throws IOException {
+	private static PyBase loadDict(WrappedBuffer buffer) throws IOException {
 		final int size = buffer.readLength();
 
 		PyBase key = null;
@@ -545,15 +545,15 @@ public class Reader {
 		return dict;
 	}
 
-	private static PyBase loadDouble(Buffer buffer) throws IOException {
+	private static PyBase loadDouble(WrappedBuffer buffer) throws IOException {
 		return new PyDouble(buffer.readDouble());
 	}
 
-	private static PyBase loadDouble0(Buffer buffer) throws IOException {
+	private static PyBase loadDouble0(WrappedBuffer buffer) throws IOException {
 		return new PyDouble(0);
 	}
 
-	private static PyBase loadFalse(Buffer buffer) throws IOException {
+	private static PyBase loadFalse(WrappedBuffer buffer) throws IOException {
 		return new PyBool(false);
 	}
 
@@ -562,7 +562,7 @@ public class Reader {
 		return new PyGlobal(bytes);
 	}
 
-	private static PyBase loadInstance(Buffer buffer) throws IOException {
+	private static PyBase loadInstance(WrappedBuffer buffer) throws IOException {
 		PyObject object = new PyObject();
 		buffer.push(object);
 
@@ -574,27 +574,27 @@ public class Reader {
 		return object;
 	}
 
-	private static PyBase loadInt(Buffer buffer) throws IOException {
+	private static PyBase loadInt(WrappedBuffer buffer) throws IOException {
 		return new PyInt(buffer.readInt());
 	}
 
-	private static PyBase loadInt0(Buffer buffer) throws IOException {
+	private static PyBase loadInt0(WrappedBuffer buffer) throws IOException {
 		return new PyInt(0);
 	}
 
-	private static PyBase loadInt1(Buffer buffer) throws IOException {
+	private static PyBase loadInt1(WrappedBuffer buffer) throws IOException {
 		return new PyInt(1);
 	}
 
-	private static PyBase loadIntMinus1(Buffer buffer) throws IOException {
+	private static PyBase loadIntMinus1(WrappedBuffer buffer) throws IOException {
 		return new PyInt(-1);
 	}
 
-	private static PyBase loadList(Buffer buffer) throws IOException {
+	private static PyBase loadList(WrappedBuffer buffer) throws IOException {
 		return loadList(buffer, buffer.readLength());
 	}
 
-	private static PyBase loadList(Buffer buffer, int size) throws IOException {
+	private static PyBase loadList(WrappedBuffer buffer, int size) throws IOException {
 		final PyList tuple = new PyList();
 		PyBase base = null;
 		int curSize = size;
@@ -609,35 +609,35 @@ public class Reader {
 		return tuple;
 	}
 
-	private static PyBase loadList0(Buffer buffer) throws IOException {
+	private static PyBase loadList0(WrappedBuffer buffer) throws IOException {
 		return loadList(buffer, 0);
 	}
 
-	private static PyBase loadList1(Buffer buffer) throws IOException {
+	private static PyBase loadList1(WrappedBuffer buffer) throws IOException {
 		return loadList(buffer, 1);
 	}
 
-	private static PyBase loadMarker(Buffer buffer) throws IOException {
+	private static PyBase loadMarker(WrappedBuffer buffer) throws IOException {
 		return new PyMarker();
 	}
 
-	private static PyBase loadNotImplemented(Buffer buffer) throws IOException {
+	private static PyBase loadNotImplemented(WrappedBuffer buffer) throws IOException {
 		byte[] type = buffer.peekBytes(buffer.position()-1, 1);
 
 		throw new IOException("Not implemented: "
 				+ Integer.toHexString(type[0]) + " at: " + buffer.position());
 	}
 
-	private static PyBase loadObjectReduce(Buffer buffer) throws IOException {
+	private static PyBase loadObjectReduce(WrappedBuffer buffer) throws IOException {
 		return loadObjectEx(buffer, true);
 	}
 
-	private static PyBase loadObjectEx(Buffer buffer) throws IOException {
+	private static PyBase loadObjectEx(WrappedBuffer buffer) throws IOException {
 		return loadObjectEx(buffer, false);
 	}
 
 
-	private static PyBase loadObjectEx(Buffer buffer, boolean reduce) throws IOException {
+	private static PyBase loadObjectEx(WrappedBuffer buffer, boolean reduce) throws IOException {
 
 		final PyObjectEx objectex = new PyObjectEx(reduce);
 
@@ -666,7 +666,7 @@ public class Reader {
 		return objectex;
 	}
 
-	private static PyBase loadPacked(Buffer buffer) throws IOException {
+	private static PyBase loadPacked(WrappedBuffer buffer) throws IOException {
 
 		final PyBase head = loadPy(buffer);
 		int size = buffer.readLength();
@@ -689,7 +689,7 @@ public class Reader {
 
 		final byte[] out = zerouncompress(bytes, size);
 
-		final Buffer outbuf = new Buffer(out);
+		final WrappedBuffer outbuf = new WrappedBuffer(out);
 
 		List<PyDBColumn> list = desc.getColumns();
 
@@ -727,7 +727,7 @@ public class Reader {
 
 //	static PyBase root = null;
 
-	private static PyBase loadPy(Buffer buffer) throws IOException {
+	private static PyBase loadPy(WrappedBuffer buffer) throws IOException {
 //		if (root != null) {
 //			System.out.println("----------root ---------");
 //			root.visit(new PyDumpVisitor());
@@ -758,43 +758,43 @@ public class Reader {
 		return pyBase;
 	}
 
-	private static PyBase loadReference(Buffer buffer) throws IOException {
+	private static PyBase loadReference(WrappedBuffer buffer) throws IOException {
 		return buffer.getReference(Integer.valueOf(buffer.readLength()));
 	}
 
-	private static PyBase loadLong(Buffer buffer) {
+	private static PyBase loadLong(WrappedBuffer buffer) {
 		return new PyLong(buffer.readLong());
 	}
 
-	private static PyBase loadShort(Buffer buffer) throws IOException {
+	private static PyBase loadShort(WrappedBuffer buffer) throws IOException {
 		return new PyShort(buffer.readShort());
 	}
 
-	private static PyBase loadString(Buffer buffer) throws IOException {
+	private static PyBase loadString(WrappedBuffer buffer) throws IOException {
 		return new PyBuffer(buffer.readBytes(buffer.readLength()));
 	}
 
-	private static PyBase loadString0(Buffer buffer) throws IOException {
+	private static PyBase loadString0(WrappedBuffer buffer) throws IOException {
 		return new PyBuffer(new byte[]{});
 	}
 
-	private static PyBase loadString1(Buffer buffer) throws IOException {
+	private static PyBase loadString1(WrappedBuffer buffer) throws IOException {
 		return new PyBuffer(buffer.readBytes(1));
 	}
 
-	private static PyBase loadStringRef(Buffer buffer) throws IOException {
+	private static PyBase loadStringRef(WrappedBuffer buffer) throws IOException {
 		return new PyBuffer(Strings.get(buffer.readLength()));
 	}
 
-	private static PyBase loadTrue(Buffer buffer) throws IOException {
+	private static PyBase loadTrue(WrappedBuffer buffer) throws IOException {
 		return new PyBool(true);
 	}
 
-	private static PyBase loadTuple(Buffer buffer) throws IOException {
+	private static PyBase loadTuple(WrappedBuffer buffer) throws IOException {
 		return loadTuple(buffer, buffer.readLength());
 	}
 
-	private static PyBase loadTuple(Buffer buffer, int size) throws IOException {
+	private static PyBase loadTuple(WrappedBuffer buffer, int size) throws IOException {
 		final PyTuple tuple = new PyTuple();
 //		if (root == null) root = tuple;
 		PyBase base = null;
@@ -810,27 +810,27 @@ public class Reader {
 		return tuple;
 	}
 
-	private static PyBase loadTuple1(Buffer buffer) throws IOException {
+	private static PyBase loadTuple1(WrappedBuffer buffer) throws IOException {
 		return loadTuple(buffer, 1);
 	}
 
-	private static PyBase loadTuple2(Buffer buffer) throws IOException {
+	private static PyBase loadTuple2(WrappedBuffer buffer) throws IOException {
 		return loadTuple(buffer, 2);
 	}
 
-	private static PyBase loadUnicode(Buffer buffer) throws IOException {
+	private static PyBase loadUnicode(WrappedBuffer buffer) throws IOException {
 		return new PyBuffer(buffer.readBytes(buffer.readLength() * 2));
 	}
 
-	private static PyBase loadUnicode0(Buffer buffer) throws IOException {
+	private static PyBase loadUnicode0(WrappedBuffer buffer) throws IOException {
 		return new PyBuffer(new byte[]{});
 	}
 
-	private static PyBase loadUnicode1(Buffer buffer) throws IOException {
+	private static PyBase loadUnicode1(WrappedBuffer buffer) throws IOException {
 		return new PyBuffer(buffer.readBytes(2));
 	}
 
-	private static PyBase loadVarInt(Buffer buffer) throws IOException {
+	private static PyBase loadVarInt(WrappedBuffer buffer) throws IOException {
 		final int size = buffer.readLength();
 
 		switch (size) {
