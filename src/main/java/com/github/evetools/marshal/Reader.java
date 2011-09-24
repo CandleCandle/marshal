@@ -38,12 +38,11 @@ import java.util.Map;
 import java.util.Stack;
 
 /**
- * Copyright (C)2011 by Gregor Anders
- * All rights reserved.
+ * Copyright (C)2011 by Gregor Anders All rights reserved.
  *
- * This code is free software; you can redistribute it and/or modify
- * it under the terms of the BSD license (see the file LICENSE.txt
- * included with the distribution).
+ * This code is free software; you can redistribute it and/or modify it under
+ * the terms of the BSD license (see the file LICENSE.txt included with the
+ * distribution).
  */
 public class Reader {
 
@@ -421,8 +420,6 @@ public class Reader {
 
 	private final Buffer buffer;
 
-	private Buffer sharedBuffer;
-
 	private Reader(Buffer buffer) throws IOException {
 		this.buffer = buffer;
 	}
@@ -505,23 +502,16 @@ public class Reader {
 					}
 				}
 
-				if (zstream.total_out < zlen) {
-					break;
-				}
-
 				if (!success) {
 					zout = null;
 					zlen = zlen * 2;
 				} else {
 					zstream.inflateEnd();
 
-					/*
-					 * for debugging byte[] uncom = new byte[(int)
-					 * zstream.total_out]; for (int loop = 0; loop <
-					 * uncom.length; loop++) { uncom[loop] = zout[loop]; }
-					 */
+					byte[] uncom = new byte[(int) zstream.total_out];
+					System.arraycopy(zout, 0, uncom, 0, uncom.length);
 
-					final Buffer buf = new Buffer(zout);
+					final Buffer buf = new Buffer(uncom);
 					final Reader reader = new Reader(buf);
 
 					return reader.read();
@@ -682,11 +672,15 @@ public class Reader {
 
 		final PyDBRow base = new PyDBRow();
 
+		if (head == null) {
+			throw new IOException("Invalid PackedRow header");
+		}
 		if (!buffer.containDescriptor(head)) {
 			buffer.putDescriptor(head, toDBRowDescriptor(head));
 		}
 
 		PyDBRowDescriptor desc = buffer.getDescriptor(head);
+
 		base.setHead(desc);
 
 		size = desc.size();
@@ -717,7 +711,8 @@ public class Reader {
 					boolcount = 0;
 				}
 
-			} else if (pyDBColumn.getDBType() == DBColumnTypes.STRING || pyDBColumn.getDBType() == DBColumnTypes.USTRING) {
+			} else if (pyDBColumn.getDBType() == DBColumnTypes.STRING
+					|| pyDBColumn.getDBType() == DBColumnTypes.USTRING) {
 				base.put(pyDBColumn.getName(), loadPy(buffer));
 			} else {
 				base.put(pyDBColumn.getName(), pyDBColumn.getDBType().read(outbuf));
@@ -753,13 +748,13 @@ public class Reader {
 				pyShared = pyBase;
 			}
 			buffer.putReference(buffer.readSharedInt(), pyShared);
+
 		}
 
 		System.out.println("---------- return at position "+buffer.getPostion()+"---------");
 		pyBase.visit(new PyDumpVisitor());
 		return pyBase;
 	}
-
 
 	private static PyBase loadReference(Buffer buffer) throws IOException {
 		return buffer.getReference(Integer.valueOf(buffer.readLength()));
@@ -853,7 +848,6 @@ public class Reader {
 	}
 
 	public PyBase read() throws IOException {
-
 		buffer.readByte(); // throw the first byte away. it's the protocol marker
 		buffer.initSharedVector();
 
