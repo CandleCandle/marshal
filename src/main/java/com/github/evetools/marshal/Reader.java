@@ -9,6 +9,7 @@ import com.github.evetools.marshal.python.PyDBRowDescriptor.DBColumnTypes;
 import com.github.evetools.marshal.python.PyDBColumn;
 import com.github.evetools.marshal.python.PyDict;
 import com.github.evetools.marshal.python.PyDouble;
+import com.github.evetools.marshal.python.PyDumpVisitor;
 import com.github.evetools.marshal.python.PyGlobal;
 import com.github.evetools.marshal.python.PyInt;
 import com.github.evetools.marshal.python.PyList;
@@ -20,7 +21,7 @@ import com.github.evetools.marshal.python.PyObjectEx;
 import com.github.evetools.marshal.python.PyDBRow;
 import com.github.evetools.marshal.python.PyShort;
 import com.github.evetools.marshal.python.PyTuple;
-import com.github.evetools.marshal.Strings;
+import com.google.common.collect.Maps;
 import com.jcraft.jzlib.JZlib;
 import com.jcraft.jzlib.ZStream;
 import java.io.ByteArrayOutputStream;
@@ -34,7 +35,6 @@ import java.nio.ByteOrder;
 import java.util.BitSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.Stack;
 
 /**
@@ -50,10 +50,32 @@ public class Reader {
 	public static class Buffer {
 
 		private final ByteBuffer buffer;
+		private final Map<Integer, PyBase> shared;
+		private Stack<PyBase> objects;
+		private Map<PyBase, PyDBRowDescriptor> descriptors;
+		private ByteBuffer sharedBuffer;
+		PyBase latest;
 
 		Buffer(byte[] bytes) {
 			this.buffer = ByteBuffer.wrap(bytes);
 			this.buffer.order(ByteOrder.LITTLE_ENDIAN);
+			shared = Maps.newHashMap();
+		}
+
+		public PyBase putReference(int key, PyBase value) {
+			return shared.put(key, value);
+		}
+
+		public PyBase getReference(int key) {
+			return shared.get(key);
+		}
+
+		public PyBase getLatest() {
+			return latest;
+		}
+
+		public void setLatest(PyBase latest) {
+			this.latest = latest;
 		}
 
 		public final int length() {
@@ -104,10 +126,53 @@ public class Reader {
 		public final short readShort() {
 			return this.buffer.getShort();
 		}
+		public final int readLength() {
+			int length = 0;
+			length = readByte() & 0xFF;
+			if (length == 255) {
+				length = readInt();
+			}
+			return length;
+		}
+
+		private void initSharedVector() {
+			final int size = readInt();
+			final int offset = length() - (size * 4);
+			sharedBuffer = ByteBuffer.wrap(peekBytes(offset, (size * 4)));
+			sharedBuffer.order(ByteOrder.LITTLE_ENDIAN);
+		}
+
+		private int readSharedInt() {
+			return sharedBuffer.getInt();
+		}
+
+		private int getPostion() {
+			return buffer.position();
+		}
+
+		public PyBase push(PyBase item) {
+			return objects.push(item);
+		}
+		public PyBase pop() {
+			return objects.pop();
+		}
+		public PyBase peek() {
+			return objects.peek();
+		}
+
+		public PyDBRowDescriptor putDescriptor(PyBase key, PyDBRowDescriptor value) {
+			return descriptors.put(key, value);
+		}
+		public PyDBRowDescriptor getDescriptor(PyBase key) {
+			return descriptors.get(key);
+		}
+		public boolean containDescriptor(PyBase key) {
+			return descriptors.containsKey(key);
+		}
 	}
 
-	interface IRead {
-		PyBase read() throws IOException;
+	interface Provider<T> {
+		T read(Buffer buffer) throws IOException;
 	}
 
 	private static byte fromBitSet(BitSet bitSet) {
@@ -121,375 +186,240 @@ public class Reader {
 		return b;
 	}
 
+	static enum ParseProvider implements Provider<PyBase> {
+		ERROR(0x00) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				throw new IOException("ERROR");
+			}
+		},
+		NOT_IMPLEMENTED(
+				0x0c, 0x0d, 0x18, 0x19,
+				0x1a, 0x1c, 0x1d, 0x1e,
+				0x21, 0x24, 0x30, 0x31,
+				0x32, 0x33, 0x34, 0x35,
+				0x36, 0x37, 0x38, 0x39,
+				0x3a
+				) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadNotImplemented(buffer);
+			}
+		},
+		NONE(0x01) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return new PyNone();
+			}
+		},
+		GLOBAL(0x02) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				final byte[] bytes = buffer.readBytes(buffer.readLength());
+				return new PyGlobal(bytes);
+			}
+		},
+		LONG(0x03) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadLong(buffer);
+			}
+		},
+		INT(0x04) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadInt(buffer);
+			}
+		},
+		SHORT(0x05) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadShort(buffer);
+			}
+		},
+		BYTE(0x06) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadByte(buffer);
+			}
+		},
+		INT_MINUS_ONE(0x07) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadIntMinus1(buffer);
+			}
+		},
+		INT_ZERO(0x08) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadInt0(buffer);
+			}
+		},
+		INT_ONE(0x09) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadInt1(buffer);
+			}
+		},
+		DOUBLE(0x0a) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadDouble(buffer);
+			}
+		},
+		DOUBLE_ZERO(0x0b) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadDouble0(buffer);
+			}
+		},
+		STRING_ZERO(0x0e) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadString0(buffer);
+			}
+		},
+		STRING_ONE(0x0f) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadString1(buffer);
+			}
+		},
+		STRING(0x10) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadString(buffer);
+			}
+		},
+		STRING_REF(0x11) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadStringRef(buffer);
+			}
+		},
+		STRING_UNICODE(0x12) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadUnicode(buffer);
+			}
+		},
+		BUFFER(0x13, 0x2e) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadBuffer(buffer);
+			}
+		},
+		TUPLE(0x14) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadTuple(buffer);
+			}
+		},
+		LIST(0x15) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadList(buffer);
+			}
+		},
+		DICT(0x16) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadDict(buffer);
+			}
+		},
+		INSTANCE(0x17) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadInstance(buffer);
+			}
+		},
+		REFERENCE(0x1b) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadReference(buffer);
+			}
+		},
+		TRUE(0x1f) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadTrue(buffer);
+			}
+		},
+		FALSE(0x20) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadFalse(buffer);
+			}
+		},
+		OBJECT_EX(0x22, 0x23) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadObjectEx(buffer);
+			}
+		},
+		TUPLE_ONE(0x25) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadTuple1(buffer);
+			}
+		},
+		LIST_ZERO(0x26) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadList0(buffer);
+			}
+		},
+		LIST_ONE(0x27) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadList1(buffer);
+			}
+		},
+		UNICODE_ZERO(0x28) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadUnicode0(buffer);
+			}
+		},
+		UNICODE_ONE(0x29) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadUnicode1(buffer);
+			}
+		},
+		PACKED(0x2a) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadPacked(buffer);
+			}
+		},
+		SUB_STREAM(0x2b) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadPacked(buffer);
+			}
+		},
+		TUPLE_TWO(0x2c) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadTuple2(buffer);
+			}
+		},
+		MARKER(0x2d) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadMarker(buffer);
+			}
+		},
+		VAR_INT(0x2f) {
+			@Override public PyBase read(Buffer buffer) throws IOException {
+				return Reader.loadVarInt(buffer);
+			}
+		},
+		;
+
+		int[] supported;
+		private ParseProvider(int... supported) {
+			this.supported = new int[supported.length];
+			System.arraycopy(supported, 0, this.supported, 0, supported.length);
+		}
+
+		private static final Map<Integer, ParseProvider> cache = Maps.newHashMap();
+		static {
+			for (ParseProvider pp : values()) {
+				for (int i : pp.supported) {
+					if (!cache.containsKey(i)) {
+						cache.put(i, pp);
+					} else {
+						throw new AssertionError("Duplicate entries for the opcode: "
+								+ i
+								+ " first: " + cache.get(i).name()
+								+ " second: " + pp.name()
+								);
+					}
+				}
+			}
+		}
+		public static ParseProvider from(int marker) {
+			if (cache.containsKey(marker)) {
+				return cache.get(marker);
+			}
+			throw new IllegalArgumentException("There is no available parser "
+					+ "for the marker: 0x"
+					+ Integer.toHexString(0xFF & marker)
+					+ " [actual: " + marker + "]"
+					);
+		}
+	}
+
+
 	private final Buffer buffer;
 
-	private final IRead[] loadMethods = new IRead[] {
-	/* 0x00 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadError();
-		}
-	},
-	/* 0x01 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNone();
-		}
-	},
-	/* 0x02 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadGlobal();
-		}
-	},
-	/* 0x03 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadLong();
-		}
-	},
-	/* 0x04 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadInt();
-		}
-	},
-	/* 0x05 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadShort();
-		}
-	},
-	/* 0x06 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadByte();
-		}
-	},
-	/* 0x07 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadIntMinus1();
-		}
-	},
-	/* 0x08 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadInt0();
-		}
-	},
-	/* 0x09 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadInt1();
-		}
-	},
-	/* 0x0a */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadDouble();
-		}
-	},
-	/* 0x0b */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadDouble0();
-		}
-	},
-	/* 0x0c */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x0d */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x0e */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadString0();
-		}
-	},
-	/* 0x0f */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadString1();
-		}
-	},
-	/* 0x10 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadString();
-		}
-	},
-	/* 0x11 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadStringRef();
-		}
-	},
-	/* 0x12 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadUnicode();
-		}
-	},
-	/* 0x13 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadBuffer();
-		}
-	},
-	/* 0x14 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadTuple();
-		}
-	},
-	/* 0x15 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadList();
-		}
-	},
-	/* 0x16 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadDict();
-		}
-	},
-	/* 0x17 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadInstance();
-		}
-	},
-	/* 0x18 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x19 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x1a */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x1b */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadReference();
-		}
-	},
-	/* 0x1c */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x1d */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x1e */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x1f */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadTrue();
-		}
-	},
-	/* 0x20 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadFalse();
-		}
-	},
-	/* 0x21 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x22 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadObjectReduce();
-		}
-	},
-	/* 0x23 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadObjectEx();
-		}
-	},
-	/* 0x24 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x25 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadTuple1();
-		}
-	},
-	/* 0x26 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadList0();
-		}
-	},
-	/* 0x27 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadList1();
-		}
-	},
-	/* 0x28 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadUnicode0();
-		}
-	},
-	/* 0x29 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadUnicode1();
-		}
-	},
-	/* 0x2a */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadPacked();
-		}
-	},
-	/* 0x2b */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadSubStream();
-		}
-	},
-	/* 0x2c */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadTuple2();
-		}
-	},
-	/* 0x2d */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadMarker();
-		}
-	},
-	/* 0x2e */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadBuffer();
-		}
-	},
-	/* 0x2f */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadVarInt();
-		}
-	},
-	/* 0x30 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x31 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x32 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x33 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x34 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x35 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x36 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x37 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x38 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x39 */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	},
-	/* 0x3a */new IRead() {
-		@Override
-		public PyBase read() throws IOException {
-			return Reader.this.loadNotImplemented();
-		}
-	} };
-
-	private int position;
-
-	private Map<Integer, PyBase> shared;
-	
-	private Map<PyBase, PyDBRowDescriptor> descriptors;
-	
 	private Buffer sharedBuffer;
-
-	private int type;
-	
-	private Stack<PyBase> objects;
 
 	private Reader(Buffer buffer) throws IOException {
 		this.buffer = buffer;
@@ -514,7 +444,7 @@ public class Reader {
 		this.buffer = new Buffer(baos.toByteArray());
 	}
 
-	private PyDBRowDescriptor toDBRowDescriptor(PyBase base)
+	private static PyDBRowDescriptor toDBRowDescriptor(PyBase base)
 			throws IOException {
 
 		if (!(base instanceof PyObjectEx)) {
@@ -527,22 +457,10 @@ public class Reader {
 		return new PyDBRowDescriptor(object);
 	}
 
-	private int length() {
 
-		int length = 0;
-
-		length = this.buffer.readByte() & 0xFF;
-
-		if (length == 255) {
-			length = this.buffer.readInt();
-		}
-
-		return length;
-	}
-
-	private PyBase loadBuffer() throws IOException {
-		final int size = this.length();
-		final byte[] bytes = this.buffer.readBytes(size);
+	private static PyBase loadBuffer(Buffer buffer) throws IOException {
+		final int size = buffer.readLength();
+		final byte[] bytes = buffer.readBytes(size);
 
 		if (bytes[0] == 0x78) {
 
@@ -611,13 +529,13 @@ public class Reader {
 		return new PyBuffer(bytes);
 	}
 
-	private PyBase loadByte() throws IOException {
-		final byte valueByte = this.buffer.readByte();
+	private static PyBase loadByte(Buffer buffer) throws IOException {
+		final byte valueByte = buffer.readByte();
 		return new PyByte(valueByte);
 	}
 
-	private PyBase loadDict() throws IOException {
-		final int size = this.length();
+	private static PyBase loadDict(Buffer buffer) throws IOException {
+		final int size = buffer.readLength();
 
 		PyBase key = null;
 		PyBase value = null;
@@ -625,73 +543,69 @@ public class Reader {
 		final PyDict dict = new PyDict();
 
 		for (int loop = 0; loop < size; loop++) {
-			value = this.loadPy();
-			key = this.loadPy();
+			value = loadPy(buffer);
+			key = loadPy(buffer);
 			dict.put(key, value);
 		}
 
 		return dict;
 	}
 
-	private PyBase loadDouble() throws IOException {
-		return new PyDouble(this.buffer.readDouble());
+	private static PyBase loadDouble(Buffer buffer) throws IOException {
+		return new PyDouble(buffer.readDouble());
 	}
 
-	private PyBase loadDouble0() throws IOException {
+	private static PyBase loadDouble0(Buffer buffer) throws IOException {
 		return new PyDouble(0);
 	}
 
-	private PyBase loadError() throws IOException {
-		throw new IOException("ERROR");
-	}
-
-	private PyBase loadFalse() throws IOException {
+	private static PyBase loadFalse(Buffer buffer) throws IOException {
 		return new PyBool(false);
 	}
 
 	private PyBase loadGlobal() throws IOException {
-		final byte[] bytes = this.buffer.readBytes(this.length());
+		final byte[] bytes = buffer.readBytes(buffer.readLength());
 		return new PyGlobal(bytes);
 	}
 
-	private PyBase loadInstance() throws IOException {
+	private static PyBase loadInstance(Buffer buffer) throws IOException {
 		PyObject object = new PyObject();
-		this.objects.push(object);
-		
-		PyBase head = this.loadPy();
+		buffer.push(object);
+
+		PyBase head = loadPy(buffer);
 		object.setHead(head);
-		PyBase content = this.loadPy();
+		PyBase content = loadPy(buffer);
 		object.setContent(content);
-		this.objects.pop();
+		buffer.pop();
 		return object;
 	}
 
-	private PyBase loadInt() throws IOException {
-		return new PyInt(this.buffer.readInt());
+	private static PyBase loadInt(Buffer buffer) throws IOException {
+		return new PyInt(buffer.readInt());
 	}
 
-	private PyBase loadInt0() throws IOException {
+	private static PyBase loadInt0(Buffer buffer) throws IOException {
 		return new PyInt(0);
 	}
 
-	private PyBase loadInt1() throws IOException {
+	private static PyBase loadInt1(Buffer buffer) throws IOException {
 		return new PyInt(1);
 	}
 
-	private PyBase loadIntMinus1() throws IOException {
+	private static PyBase loadIntMinus1(Buffer buffer) throws IOException {
 		return new PyInt(-1);
 	}
 
-	private PyBase loadList() throws IOException {
-		return this.loadList(this.length());
+	private static PyBase loadList(Buffer buffer) throws IOException {
+		return loadList(buffer, buffer.readLength());
 	}
 
-	private PyBase loadList(int size) throws IOException {
+	private static PyBase loadList(Buffer buffer, int size) throws IOException {
 		final PyList tuple = new PyList();
 		PyBase base = null;
 		int curSize = size;
 		while (curSize > 0) {
-			base = this.loadPy();
+			base = loadPy(buffer);
 			if (base == null) {
 				throw new IOException("null element in list found");
 			}
@@ -701,97 +615,93 @@ public class Reader {
 		return tuple;
 	}
 
-	private PyBase loadList0() throws IOException {
-		return this.loadList(0);
+	private static PyBase loadList0(Buffer buffer) throws IOException {
+		return loadList(buffer, 0);
 	}
 
-	private PyBase loadList1() throws IOException {
-		return this.loadList(1);
+	private static PyBase loadList1(Buffer buffer) throws IOException {
+		return loadList(buffer, 1);
 	}
 
-	private PyBase loadLong() throws IOException {
-		return new PyLong(this.buffer.readLong());
-	}
-
-	private PyBase loadNone() throws IOException {
-		return new PyNone();
-	}
-
-	private PyBase loadMarker() throws IOException {
+	private static PyBase loadMarker(Buffer buffer) throws IOException {
 		return new PyMarker();
 	}
 
-	private PyBase loadNotImplemented() throws IOException {
+	private static PyBase loadNotImplemented(Buffer buffer) throws IOException {
+		byte[] type = buffer.peekBytes(buffer.position()-1, 1);
+
 		throw new IOException("Not implemented: "
-				+ Integer.toHexString(this.type) + " at: " + this.position);
+				+ Integer.toHexString(type[0]) + " at: " + buffer.position());
 	}
 
-	private PyBase loadObjectReduce() throws IOException {
-		return loadObjectEx(true);
+	private static PyBase loadObjectReduce(Buffer buffer) throws IOException {
+		return loadObjectEx(buffer, true);
 	}
-	
-	private PyBase loadObjectEx() throws IOException {
-		return loadObjectEx(false);
+
+	private static PyBase loadObjectEx(Buffer buffer) throws IOException {
+		return loadObjectEx(buffer, false);
 	}
-	
-	private PyBase loadObjectEx(boolean reduce) throws IOException {
+
+
+	private static PyBase loadObjectEx(Buffer buffer, boolean reduce) throws IOException {
 
 		final PyObjectEx objectex = new PyObjectEx(reduce);
 
-		this.objects.push(objectex);
+		buffer.push(objectex);
+		buffer.setLatest(objectex);
 
-		objectex.setHead(this.loadPy());
+		objectex.setHead(loadPy(buffer));
 
-		while (this.buffer.peekByte() != 0x2d) {
-			objectex.getList().add(this.loadPy());
+		while (buffer.peekByte() != 0x2d) {
+			objectex.getList().add(loadPy(buffer));
 		}
-		this.buffer.readByte();
+		buffer.readByte();
 
 		PyBase key = null;
 		PyBase value = null;
 
-		while (this.buffer.peekByte() != 0x2d) {
-			value = this.loadPy();
-			key = this.loadPy();
+		while (buffer.peekByte() != 0x2d) {
+			value = loadPy(buffer);
+			key = loadPy(buffer);
 			objectex.getDict().put(key, value);
 		}
-		this.buffer.readByte();
+		buffer.readByte();
 
-		this.objects.pop();
-		
+		buffer.pop();
+
 		return objectex;
 	}
 
-	private PyBase loadPacked() throws IOException {
+	private static PyBase loadPacked(Buffer buffer) throws IOException {
 
-		final PyBase head = this.loadPy();
-		int size = this.length();
-		final byte[] bytes = this.buffer.readBytes(size);
+		final PyBase head = loadPy(buffer);
+		int size = buffer.readLength();
+		final byte[] bytes = buffer.readBytes(size);
 
 		final PyDBRow base = new PyDBRow();
 
-		if (!this.descriptors.containsKey(head)) {
-			this.descriptors.put(head, this.toDBRowDescriptor(head));
+		if (!buffer.containDescriptor(head)) {
+			buffer.putDescriptor(head, toDBRowDescriptor(head));
 		}
-		
-		PyDBRowDescriptor desc = this.descriptors.get(head);
+
+		PyDBRowDescriptor desc = buffer.getDescriptor(head);
 		base.setHead(desc);
-		
+
 		size = desc.size();
 
-		final byte[] out = this.zerouncompress(bytes, size);
+		final byte[] out = zerouncompress(bytes, size);
 
 		final Buffer outbuf = new Buffer(out);
 
 		List<PyDBColumn> list = desc.getColumns();
-		
+
 		int boolcount = 0;
 		int boolvalue = 0;
-		
+
 		for (PyDBColumn pyDBColumn : list) {
 
 			if (pyDBColumn.getDBType() == DBColumnTypes.BOOL) {
-				
+
 				if (boolcount == 0) {
 					boolvalue = outbuf.readByte();
 				}
@@ -804,92 +714,94 @@ public class Reader {
 				if (boolcount == 8) {
 					boolcount = 0;
 				}
-				
+
 			} else if (pyDBColumn.getDBType() == DBColumnTypes.STRING || pyDBColumn.getDBType() == DBColumnTypes.USTRING) {
-				base.put(pyDBColumn.getName(), loadPy());
+				base.put(pyDBColumn.getName(), loadPy(buffer));
 			} else {
 				base.put(pyDBColumn.getName(), pyDBColumn.getDBType().read(outbuf));
 			}
-			
+
 		}
-		
+
 		return base;
 	}
 
-	private PyBase loadPy() throws IOException {
+	static PyBase root = null;
 
-		this.position = this.buffer.position();
+	private static PyBase loadPy(Buffer buffer) throws IOException {
+		if (root != null) {
+			System.out.println("----------root ---------");
+			root.visit(new PyDumpVisitor());
+		}
 
-		final byte magic = this.buffer.readByte();
+		final byte magic = buffer.readByte();
 		final boolean sharedPy = (magic & 0x40) != 0;
-		this.type = magic;
-		this.type = (this.type & 0x3f);
+		int type = magic;
+		type = (type & 0x3f);
 
-		final PyBase pyBase = this.loadMethods[this.type].read();
+		ParseProvider provider = ParseProvider.from(type);
+		final PyBase pyBase = provider.read(buffer);
+
 		PyBase pyShared = null;
-		
 		if (sharedPy) {
-			
+
 			if (pyBase.isGlobal()) {
-				pyShared = this.objects.peek();
+				pyShared = buffer.peek();
 			} else {
 				pyShared = pyBase;
 			}
-			
-			this.shared.put(Integer.valueOf(this.sharedBuffer.readInt()), pyShared);
+			buffer.putReference(buffer.readSharedInt(), pyShared);
 		}
 
+		System.out.println("---------- return at position "+buffer.getPostion()+"---------");
+		pyBase.visit(new PyDumpVisitor());
 		return pyBase;
 	}
 
-	private PyBase loadReference() throws IOException {
-		PyBase pyBase = this.shared.get(Integer.valueOf(this.length()));
-		
-		return pyBase;
+
+	private static PyBase loadReference(Buffer buffer) throws IOException {
+		return buffer.getReference(Integer.valueOf(buffer.readLength()));
 	}
 
-	private PyBase loadShort() throws IOException {
-		return new PyShort(this.buffer.readShort());
+	private static PyBase loadLong(Buffer buffer) {
+		return new PyLong(buffer.readLong());
 	}
 
-	private PyBase loadString() throws IOException {
-		return new PyBuffer(this.buffer.readBytes(this.length()));
+	private static PyBase loadShort(Buffer buffer) throws IOException {
+		return new PyShort(buffer.readShort());
 	}
 
-	private PyBase loadString0() throws IOException {
-		byte[] b = {0};
-		return new PyBuffer(b);
+	private static PyBase loadString(Buffer buffer) throws IOException {
+		return new PyBuffer(buffer.readBytes(buffer.readLength()));
 	}
 
-	private PyBase loadString1() throws IOException {
-		return new PyBuffer(this.buffer.readBytes(1));
+	private static PyBase loadString0(Buffer buffer) throws IOException {
+		return new PyBuffer(new byte[]{});
 	}
 
-	private PyBase loadStringRef() throws IOException {
-		return new PyBuffer(Strings.get(this.length()).getBytes());
+	private static PyBase loadString1(Buffer buffer) throws IOException {
+		return new PyBuffer(buffer.readBytes(1));
 	}
 
-	private PyBase loadSubStream() throws IOException {
-		final int size = this.length();
-		final Buffer buf = new Buffer(this.buffer.readBytes(size));
-		final Reader reader = new Reader(buf);
-		return reader.read();
+	private static PyBase loadStringRef(Buffer buffer) throws IOException {
+		return new PyBuffer(Strings.get(buffer.readLength()));
 	}
 
-	private PyBase loadTrue() throws IOException {
+	private static PyBase loadTrue(Buffer buffer) throws IOException {
 		return new PyBool(true);
 	}
 
-	private PyBase loadTuple() throws IOException {
-		return this.loadTuple(this.length());
+	private static PyBase loadTuple(Buffer buffer) throws IOException {
+		return loadTuple(buffer, buffer.readLength());
 	}
 
-	private PyBase loadTuple(int size) throws IOException {
+	private static PyBase loadTuple(Buffer buffer, int size) throws IOException {
 		final PyTuple tuple = new PyTuple();
+		if (root == null) root = tuple;
 		PyBase base = null;
 		int curSize = size;
 		while (curSize > 0) {
-			base = this.loadPy();
+			base = loadPy(buffer);
 			if (base == null) {
 				throw new IOException("null element in tuple found");
 			}
@@ -899,72 +811,64 @@ public class Reader {
 		return tuple;
 	}
 
-	private PyBase loadTuple1() throws IOException {
-		return this.loadTuple(1);
+	private static PyBase loadTuple1(Buffer buffer) throws IOException {
+		return loadTuple(buffer, 1);
 	}
 
-	private PyBase loadTuple2() throws IOException {
-		return this.loadTuple(2);
+	private static PyBase loadTuple2(Buffer buffer) throws IOException {
+		return loadTuple(buffer, 2);
 	}
 
-	private PyBase loadUnicode() throws IOException {
-		return new PyBuffer(this.buffer.readBytes(this.length() * 2));
+	private static PyBase loadUnicode(Buffer buffer) throws IOException {
+		return new PyBuffer(buffer.readBytes(buffer.readLength() * 2));
 	}
 
-	private PyBase loadUnicode0() throws IOException {
-		byte[] b = {0};
-		return new PyBuffer(b);
+	private static PyBase loadUnicode0(Buffer buffer) throws IOException {
+		return new PyBuffer(new byte[]{});
 	}
 
-	private PyBase loadUnicode1() throws IOException {
-		return new PyBuffer(this.buffer.readBytes(2));
+	private static PyBase loadUnicode1(Buffer buffer) throws IOException {
+		return new PyBuffer(buffer.readBytes(2));
 	}
 
-	private PyBase loadVarInt() throws IOException {
-
-		final int size = this.length();
+	private static PyBase loadVarInt(Buffer buffer) throws IOException {
+		final int size = buffer.readLength();
 
 		switch (size) {
 		case 0:
 			return new PyLong(0);
 		case 2:
-			return this.loadShort();
+			return loadShort(buffer);
 		case 4:
-			return this.loadInt();
+			return loadInt(buffer);
 		case 8:
-			return this.loadLong();
+			return loadLong(buffer);
 		default:
-			final byte[] bytes = this.buffer.readBytes(size);
-
+			final byte[] bytes = buffer.readBytes(size);
 			final BigInteger bi = new BigInteger(bytes);
-
 			return new PyLong(bi.longValue());
 		}
 	}
 
 	public PyBase read() throws IOException {
 
-		this.buffer.readByte();
+		buffer.readByte();
 		int size = this.buffer.readInt();
-
-		this.shared = new HashMap<Integer, PyBase>(size);
-		this.objects = new Stack<PyBase>();
-		this.descriptors = new HashMap<PyBase, PyDBRowDescriptor>(size);
 
 		size  = size * (Integer.SIZE / Byte.SIZE);
 		final int offset = this.buffer.length() - (size);
 
-		this.sharedBuffer = new Buffer(
-				this.buffer.peekBytes(offset, (size)));
+		buffer.readByte(); // throw the first byte away. it's the protocol marker
+		buffer.initSharedVector();
 
 		PyBase base = null;
 
-		base = this.loadPy();
+		base = loadPy(buffer);
 
 		return base;
 	}
 
-	private byte[] zerouncompress(byte[] bytes, int size) throws IOException {
+	private static byte[] zerouncompress(byte[] bytes, int size) throws IOException {
 
 		final byte[] out = new byte[size + 16];
 		int outpos = 0;
