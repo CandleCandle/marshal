@@ -9,7 +9,6 @@ import com.github.evetools.marshal.python.PyDBRowDescriptor.DBColumnTypes;
 import com.github.evetools.marshal.python.PyDBColumn;
 import com.github.evetools.marshal.python.PyDict;
 import com.github.evetools.marshal.python.PyDouble;
-import com.github.evetools.marshal.python.PyDumpVisitor;
 import com.github.evetools.marshal.python.PyGlobal;
 import com.github.evetools.marshal.python.PyInt;
 import com.github.evetools.marshal.python.PyList;
@@ -407,11 +406,11 @@ public class Reader {
 				}
 			}
 		}
-		public static ParseProvider from(int marker) {
+		public static ParseProvider from(int marker) throws NoSuchProviderException {
 			if (cache.containsKey(marker)) {
 				return cache.get(marker);
 			}
-			throw new IllegalArgumentException("There is no available parser "
+			throw new NoSuchProviderException("There is no available parser "
 					+ "for the marker: 0x"
 					+ Integer.toHexString(0xFF & marker)
 					+ " [actual: " + marker + "]"
@@ -735,11 +734,20 @@ public class Reader {
 
 		final byte magic = buffer.readByte();
 		final boolean sharedPy = (magic & 0x40) != 0;
-		int type = magic;
-		type = (type & 0x3f);
+		final int type = (magic & 0x3f);
 
-		ParseProvider provider = ParseProvider.from(type);
-		final PyBase pyBase = provider.read(buffer);
+		final PyBase pyBase;
+		try {
+			ParseProvider provider = ParseProvider.from(type);
+			pyBase = provider.read(buffer);
+		} catch (NoSuchProviderException nspe) {
+			throw new IllegalArgumentException("Failed to find"
+				+ " a valid provider for position: " + buffer.getPostion()
+				+ ". Original magic is " + Integer.toHexString(magic)
+				+ ". Type is " + Integer.toHexString(type)
+				+ ". Wrapped message is: " + nspe.getMessage(), nspe
+				);
+		}
 
 		PyBase pyShared = null;
 		if (sharedPy) {
