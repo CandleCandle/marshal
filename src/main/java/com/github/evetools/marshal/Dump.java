@@ -12,8 +12,8 @@ import java.io.File;
  * it under the terms of the BSD license (see the file LICENSE.txt
  * included with the distribution).
  */
-public class App {
-	private App() {
+public class Dump {
+	private Dump() {
 		throw new AssertionError("Utility class constructor: App should never ne called.");
 	}
 
@@ -51,7 +51,7 @@ public class App {
 			//e.printStackTrace();
 			System.exit(-3);
 		} catch (final OutOfMemoryError e) {
-			System.out.println("Could not decode [out of memory]" + fileName + ".");
+			System.out.println("Could not decode [out of memory] " + fileName + ".");
 			//e.printStackTrace();
 			System.exit(-3);
 		}
