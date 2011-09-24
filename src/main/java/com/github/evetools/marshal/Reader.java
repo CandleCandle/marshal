@@ -725,13 +725,13 @@ public class Reader {
 		return base;
 	}
 
-	static PyBase root = null;
+//	static PyBase root = null;
 
 	private static PyBase loadPy(Buffer buffer) throws IOException {
-		if (root != null) {
-			System.out.println("----------root ---------");
-			root.visit(new PyDumpVisitor());
-		}
+//		if (root != null) {
+//			System.out.println("----------root ---------");
+//			root.visit(new PyDumpVisitor());
+//		}
 
 		final byte magic = buffer.readByte();
 		final boolean sharedPy = (magic & 0x40) != 0;
@@ -753,8 +753,8 @@ public class Reader {
 
 		}
 
-		System.out.println("---------- return at position "+buffer.getPostion()+"---------");
-		pyBase.visit(new PyDumpVisitor());
+//		System.out.println("---------- return at position "+buffer.getPostion()+"---------");
+//		pyBase.visit(new PyDumpVisitor());
 		return pyBase;
 	}
 
@@ -796,7 +796,7 @@ public class Reader {
 
 	private static PyBase loadTuple(Buffer buffer, int size) throws IOException {
 		final PyTuple tuple = new PyTuple();
-		if (root == null) root = tuple;
+//		if (root == null) root = tuple;
 		PyBase base = null;
 		int curSize = size;
 		while (curSize > 0) {
