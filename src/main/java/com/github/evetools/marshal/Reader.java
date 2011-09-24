@@ -59,6 +59,8 @@ public class Reader {
 			this.buffer = ByteBuffer.wrap(bytes);
 			this.buffer.order(ByteOrder.LITTLE_ENDIAN);
 			shared = Maps.newHashMap();
+			descriptors = Maps.newHashMap();
+			objects = new Stack<PyBase>();
 		}
 
 		public PyBase putReference(int key, PyBase value) {
