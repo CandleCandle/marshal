@@ -136,9 +136,11 @@ public class Reader {
 		}
 
 		private void initSharedVector() {
-			final int size = readInt();
-			final int offset = length() - (size * 4);
-			sharedBuffer = ByteBuffer.wrap(peekBytes(offset, (size * 4)));
+			int size = readInt();
+			size *= (Integer.SIZE / Byte.SIZE);
+			final int offset = length() - size;
+
+			sharedBuffer = ByteBuffer.wrap(peekBytes(offset, size));
 			sharedBuffer.order(ByteOrder.LITTLE_ENDIAN);
 		}
 
@@ -851,12 +853,6 @@ public class Reader {
 	}
 
 	public PyBase read() throws IOException {
-
-		buffer.readByte();
-		int size = this.buffer.readInt();
-
-		size  = size * (Integer.SIZE / Byte.SIZE);
-		final int offset = this.buffer.length() - (size);
 
 		buffer.readByte(); // throw the first byte away. it's the protocol marker
 		buffer.initSharedVector();
