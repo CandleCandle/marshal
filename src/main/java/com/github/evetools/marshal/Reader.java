@@ -20,6 +20,7 @@ import com.github.evetools.marshal.python.PyObjectEx;
 import com.github.evetools.marshal.python.PyDBRow;
 import com.github.evetools.marshal.python.PyShort;
 import com.github.evetools.marshal.python.PyTuple;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jcraft.jzlib.JZlib;
 import com.jcraft.jzlib.ZStream;
@@ -49,16 +50,19 @@ public class Reader {
 
 		private final ByteBuffer buffer;
 		private final Map<Integer, PyBase> shared;
-		private Stack<PyBase> objects;
-		private Map<PyBase, PyDBRowDescriptor> descriptors;
+		private final Stack<PyBase> objects;
+		private final Map<PyBase, PyDBRowDescriptor> descriptors;
 		private ByteBuffer sharedBuffer;
-		PyBase latest;
+		private PyBase latest;
+		private int depth = 0;
+		private final List<ParsePosition> tokensRead;
 
 		WrappedBuffer(byte[] bytes) {
 			this.buffer = ByteBuffer.wrap(bytes);
 			this.buffer.order(ByteOrder.LITTLE_ENDIAN);
 			shared = Maps.newHashMap();
 			descriptors = Maps.newHashMap();
+			tokensRead = Lists.newArrayList();
 			objects = new Stack<PyBase>();
 		}
 
@@ -170,6 +174,32 @@ public class Reader {
 		}
 		public boolean containDescriptor(PyBase key) {
 			return descriptors.containsKey(key);
+		}
+
+		int getDepth() { return depth; }
+		void incrementDepth() { depth++; }
+		void decrementDepth() { depth--; }
+		void tokenFound(Provider<PyBase> provider) {
+			tokensRead.add(new ParsePosition(provider, getPostion(), getDepth()));
+		}
+	}
+	static class ParsePosition {
+		private final Provider<PyBase> provider;
+		private final int position;
+		private final int depth;
+		ParsePosition(Provider<PyBase> provider, int position, int depth) {
+			this.provider = provider;
+			this.position = position;
+			this.depth = depth;
+		}
+		int getDepth() {
+			return depth;
+		}
+		int getPosition() {
+			return position;
+		}
+		Provider<PyBase> getProvider() {
+			return provider;
 		}
 	}
 
@@ -731,16 +761,27 @@ public class Reader {
 //			System.out.println("----------root ---------");
 //			root.visit(new PyDumpVisitor());
 //		}
-
 		final byte magic = buffer.readByte();
 		final boolean sharedPy = (magic & 0x40) != 0;
 		final int type = (magic & 0x3f);
 
 		final PyBase pyBase;
 		try {
+			buffer.incrementDepth();
 			ParseProvider provider = ParseProvider.from(type);
+			buffer.tokenFound(provider);
 			pyBase = provider.read(buffer);
+			buffer.decrementDepth();
 		} catch (NoSuchProviderException nspe) {
+			for (ParsePosition entry : buffer.tokensRead) {
+				for (int i = 0; i < entry.getDepth(); ++i) {
+					System.err.print(".\t");
+				}
+				System.err.print(entry.getProvider());
+				System.err.print(" [");
+				System.err.print(entry.getPosition());
+				System.err.println("]");
+			}
 			throw new IllegalArgumentException("Failed to find"
 				+ " a valid provider for position: " + buffer.getPostion()
 				+ ". Original magic is " + Integer.toHexString(magic)
