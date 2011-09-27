@@ -5,15 +5,14 @@ import com.github.evetools.marshal.python.PyBool;
 import com.github.evetools.marshal.python.PyBuffer;
 import com.github.evetools.marshal.python.PyByte;
 import com.github.evetools.marshal.python.PyDBRowDescriptor;
-import com.github.evetools.marshal.python.PyDBRowDescriptor.DBColumnTypes;
 import com.github.evetools.marshal.python.PyDBColumn;
+import com.github.evetools.marshal.python.PyDBColumn.DBColumnType;
 import com.github.evetools.marshal.python.PyDict;
 import com.github.evetools.marshal.python.PyDouble;
 import com.github.evetools.marshal.python.PyGlobal;
 import com.github.evetools.marshal.python.PyInt;
 import com.github.evetools.marshal.python.PyList;
 import com.github.evetools.marshal.python.PyLong;
-import com.github.evetools.marshal.python.PyMarker;
 import com.github.evetools.marshal.python.PyNone;
 import com.github.evetools.marshal.python.PyObject;
 import com.github.evetools.marshal.python.PyObjectEx;
@@ -233,7 +232,7 @@ public class Reader {
 				0x21, 0x24, 0x30, 0x31,
 				0x32, 0x33, 0x34, 0x35,
 				0x36, 0x37, 0x38, 0x39,
-				0x3a
+				0x3a, 0x2d
 				) {
 			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadNotImplemented(buffer);
@@ -408,11 +407,6 @@ public class Reader {
 		TUPLE_TWO(0x2c) {
 			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
 				return Reader.loadTuple2(buffer);
-			}
-		},
-		MARKER(0x2d) {
-			@Override public PyBase read(WrappedBuffer buffer) throws IOException {
-				return Reader.loadMarker(buffer);
 			}
 		},
 		VAR_INT(0x2f) {
@@ -662,10 +656,6 @@ public class Reader {
 		return loadList(buffer, 1);
 	}
 
-	private static PyBase loadMarker(WrappedBuffer buffer) throws IOException {
-		return new PyMarker();
-	}
-
 	private static PyBase loadNotImplemented(WrappedBuffer buffer) throws IOException {
 		byte[] type = buffer.peekBytes(buffer.position()-1, 1);
 
@@ -717,8 +707,6 @@ public class Reader {
 		int size = buffer.readLength();
 		final byte[] bytes = buffer.readBytes(size);
 
-		final PyDBRow base = new PyDBRow();
-
 		if (head == null) {
 			throw new IOException("Invalid PackedRow header");
 		}
@@ -727,8 +715,7 @@ public class Reader {
 		}
 
 		PyDBRowDescriptor desc = buffer.getDescriptor(head);
-
-		base.setHead(desc);
+		final PyDBRow base = new PyDBRow(desc);
 
 		size = desc.size();
 
@@ -743,7 +730,7 @@ public class Reader {
 
 		for (PyDBColumn pyDBColumn : list) {
 
-			if (pyDBColumn.getDBType() == DBColumnTypes.BOOL) {
+			if (pyDBColumn.getDBType() == DBColumnType.BOOL) {
 
 				if (boolcount == 0) {
 					boolvalue = outbuf.readByte();
@@ -758,8 +745,8 @@ public class Reader {
 					boolcount = 0;
 				}
 
-			} else if (pyDBColumn.getDBType() == DBColumnTypes.STRING
-					|| pyDBColumn.getDBType() == DBColumnTypes.USTRING) {
+			} else if (pyDBColumn.getDBType() == DBColumnType.STRING
+					|| pyDBColumn.getDBType() == DBColumnType.USTRING) {
 				base.put(pyDBColumn.getName(), loadPy(buffer));
 			} else {
 				base.put(pyDBColumn.getName(), pyDBColumn.getDBType().read(outbuf));

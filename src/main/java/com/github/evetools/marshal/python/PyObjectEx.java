@@ -1,111 +1,154 @@
 package com.github.evetools.marshal.python;
 
+import java.io.IOException;
+
 /**
- * Copyright (C)2011 by Gregor Anders
- * All rights reserved.
+ * Copyright (C)2011 by Gregor Anders All rights reserved.
  *
- * This code is free software; you can redistribute it and/or modify
- * it under the terms of the BSD license (see the file LICENSE.txt
- * included with the distribution).
+ * This code is free software; you can redistribute it and/or modify it under
+ * the terms of the BSD license (see the file LICENSE.txt included with the
+ * distribution).
  */
 public class PyObjectEx extends PyBase {
 
-	private PyDict dict;
+    /**
+     * dict.
+     */
+    private PyDict dict;
 
-	private PyBase head;
+    /**
+     * head.
+     */
+    private PyBase head;
 
-	private PyList list;
-	
-	private boolean reduce;
-	
-	public PyObjectEx() {
-		super(PyType.OBJECTEX);
-		this.head = null;
-		this.reduce = false;
-		this.list = new PyList();
-		this.dict = new PyDict();
-	}
+    /**
+     * list.
+     */
+    private PyList list;
 
-	public PyObjectEx(boolean reduce) {
-		super(PyType.OBJECTEX);
-		this.head = null;
-		this.reduce = true;
-		this.list = new PyList();
-		this.dict = new PyDict();
-	}
-	
-	public boolean isReduce() {
-		return reduce;
-	}
+    /**
+     * reduce style object.
+     */
+    private boolean reduce;
 
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj) {
-			return true;
-		}
-		if (!super.equals(obj)) {
-			return false;
-		}
-		if (this.getClass() != obj.getClass()) {
-			return false;
-		}
-		final PyObjectEx other = (PyObjectEx) obj;
-		if (this.dict == null) {
-			if (other.dict != null) {
-				return false;
-			}
-		} else if (!this.dict.equals(other.dict)) {
-			return false;
-		}
-		if (this.head == null) {
-			if (other.head != null) {
-				return false;
-			}
-		} else if (!this.head.equals(other.head)) {
-			return false;
-		}
-		if (this.list == null) {
-			if (other.list != null) {
-				return false;
-			}
-		} else if (!this.list.equals(other.list)) {
-			return false;
-		}
-		return true;
-	}
+    /**
+     * PyObjectEx.
+     * @param red reduce style object
+     */
+    public PyObjectEx(final boolean red) {
+        super(PyType.OBJECTEX);
+        this.head = null;
+        this.reduce = red;
+        this.list = new PyList();
+        this.dict = new PyDict();
+    }
 
-	public PyDict getDict() {
-		return this.dict;
-	}
+    /**
+     * Is reduce object.
+     * @return reduce object flag
+     */
+    public final boolean isReduce() {
+        return reduce;
+    }
 
-	public PyBase getHead() {
-		return this.head;
-	}
+    @Override
+    public final boolean equals(final Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (!super.equals(obj)) {
+            return false;
+        }
+        if (this.getClass() != obj.getClass()) {
+            return false;
+        }
+        final PyObjectEx other = (PyObjectEx) obj;
+        if (this.dict == null) {
+            if (other.dict != null) {
+                return false;
+            }
+        } else if (!this.dict.equals(other.dict)) {
+            return false;
+        }
+        if (this.head == null) {
+            if (other.head != null) {
+                return false;
+            }
+        } else if (!this.head.equals(other.head)) {
+            return false;
+        }
+        if (this.list == null) {
+            if (other.list != null) {
+                return false;
+            }
+        } else if (!this.list.equals(other.list)) {
+            return false;
+        }
+        return true;
+    }
 
-	public PyList getList() {
-		return this.list;
-	}
+    /**
+     * Returns dict.
+     * @return dict
+     */
+    public final PyDict getDict() {
+        return this.dict;
+    }
 
-	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = super.hashCode();
-		result = (prime * result)
-				+ ((this.dict == null) ? 0 : this.dict.hashCode());
-		result = (prime * result)
-				+ ((this.head == null) ? 0 : this.head.hashCode());
-		result = (prime * result)
-				+ ((this.list == null) ? 0 : this.list.hashCode());
-		return result;
-	}
+    /**
+     * Returns head.
+     * @return head
+     */
+    public final PyBase getHead() {
+        return this.head;
+    }
 
-	public void setHead(PyBase head) {
-		this.head = head;
-	}
+    /**
+     * Returns list.
+     * @return list
+     */
+    public final PyList getList() {
+        return this.list;
+    }
 
-	@Override
-	public boolean visit(PyVisitor visitor) {
-		return (visitor.visit(this));
-	}
+    @Override
+    public final int hashCode() {
+        final int prime = 31;
+        int result = this.getType().hashCode();
+        result = (prime * result);
+        if (this.dict != null) {
+            result += this.dict.hashCode();
+        }
+        if (this.head != null) {
+            result += this.head.hashCode();
+        }
+        if (this.list != null) {
+            result += this.list.hashCode();
+        }
+        return result;
+    }
+
+    /**
+     * Set head.
+     * @param header head
+     */
+    public final void setHead(final PyBase header) {
+        this.head = header;
+    }
+
+    @Override
+    public final boolean visit(final PyVisitor visitor) throws IOException {
+        return (visitor.visit(this));
+    }
+
+    @Override
+    public final int compareTo(final PyBase o) {
+        if (o.getType() == this.getType()) {
+            return Integer.valueOf(o.asObjectEx().hashCode()).compareTo(
+                    this.hashCode());
+        } else {
+            return 1;
+        }
+    }
 
 }
